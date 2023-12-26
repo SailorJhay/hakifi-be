@@ -1,0 +1,145 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mongodb"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String      @id @default(auto()) @map("_id") @db.ObjectId
+  walletAddress String      @unique
+  nonce         Int?        @default(0)
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+  insurances    Insurance[]
+
+  @@map("users")
+}
+
+enum InsuranceSide {
+  BULL
+  BEAR
+}
+
+enum InsuranceState {
+  PENDING // Đang chờ chuyển tiền
+  AVAILABLE // Đã chuyển tiền, đang khả dụng
+  EXPIRED // Đã hết hạn
+  REFUNDED // Đã hoàn tiền
+  REFUND_WAITING // Đang chờ hoàn tiền
+  CLAIMED // Đã được claim
+  CLAIM_WAITING // Đang chờ claim
+  LIQUIDATED // Đã bị thanh lý khi chạm p_liquidation trong khi available
+  INVALID // Hợp đồng không hợp lệ
+  CANCELLED // Hợp đồng đã được cancel bởi người dùng (trong khoảng p_cancel -> p_claim)
+}
+
+enum InsurancePeriodUnit {
+  DAY
+  HOUR
+}
+
+enum BaseUnit {
+  USDT
+}
+
+type InsuranceMetadata {
+  signalId String? @db.ObjectId
+}
+
+type StateLog {
+  state  InsuranceState
+  txhash String?
+  error  String?
+  time   DateTime
+}
+
+model Insurance {
+  id                String              @id @default(auto()) @map("_id") @db.ObjectId
+  userId            String              @db.ObjectId
+  txhash            String?
+  asset             String
+  unit              BaseUnit
+  margin            Float
+  q_claim           Float
+  q_covered         Float
+  p_open            Float
+  p_close           Float?
+  p_liquidation     Float
+  p_claim           Float
+  p_refund          Float
+  p_cancel          Float
+  leverage          Float
+  periodChangeRatio Float
+  hedge             Float
+  systemCapital     Float
+  invalidReason     String?
+  period            Int
+  periodUnit        InsurancePeriodUnit
+  state             InsuranceState
+  stateLogs         StateLog[]
+  side              InsuranceSide
+  metadata          InsuranceMetadata?
+  isTransferBinance Boolean             @default(false)
+  expiredAt         DateTime
+  closedAt          DateTime?
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+  user              User                @relation(fields: [userId], references: [id])
+
+  @@index([state])
+  @@map("insurances")
+}
+
+type TokenContent {
+  en String?
+  vi String?
+}
+
+model Token {
+  id         String       @id @default(auto()) @map("_id") @db.ObjectId
+  name       String
+  symbol     String       @unique
+  decimals   Int
+  address    String?
+  attachment String?
+  content    TokenContent
+  isActive   Boolean      @default(true)
+  createdAt  DateTime     @default(now())
+  updatedAt  DateTime     @updatedAt
+  pairs      Pair[]
+
+  @@map("tokens")
+}
+
+model Pair {
+  id         String      @id @default(auto()) @map("_id") @db.ObjectId
+  symbol     String      @unique
+  asset      String
+  unit       BaseUnit
+  isMaintain Boolean     @default(false)
+  isActive   Boolean     @default(true)
+  isHot      Boolean     @default(false)
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
+  token      Token       @relation(fields: [asset], references: [symbol])
+  config     PairConfig?
+
+  @@map("pairs")
+}
+
+model PairConfig {
+  id                  String   @id @default(auto()) @map("_id") @db.ObjectId
+  symbol              String   @unique
+  listDayChangeRatio  Float[]
+  listHourChangeRatio Float[]
+  pair                Pair     @relation(fields: [symbol], references: [symbol])
+  updatedAt           DateTime @updatedAt
+
+  @@map("pair_configs")
+}
